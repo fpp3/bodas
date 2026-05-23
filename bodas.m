@@ -9,10 +9,9 @@
 %
 
 function [G, w] = bodas(sys)
-q = zpk(sys); 
-z = q.Z{1};
-p = q.P{1};
-k = q.K;
+[z, p, k] = zpkdata(sys);
+z = z{1};
+p = p{1};
 
 i = 1;
 while(~isempty(z))
@@ -127,10 +126,10 @@ for i = 1:length(z)
         G = G * s;
     else
         if isreal(z(i)) == true
-            legend_text{ctr} = "s+"+ num2str(z(i));
+            legend_text{ctr} = ["s+", num2str(z(i))];
             G = G * (s+z(i));
         elseif isreal(z(i)) == false
-            legend_text{ctr} = "(s+"+ num2str(z(i))+") (s+"+ num2str(conj(z(i)))+")" ;
+            legend_text{ctr} = ["(s+", num2str(z(i)), ") (s+", num2str(conj(z(i))), ")"];
             G = G * (s+z(i)) * (s+conj(z(i)));
         end
     end
@@ -178,10 +177,10 @@ for i = 1:length(p)
         legend_text{ctr} = "1/s";
         G = G * 1/s;
     elseif isreal(p(i)) == false
-        legend_text{ctr} = "1/( (s+"+ num2str(p(i))+") (s+"+ num2str(conj(p(i)))+")" +" )" ;
+        legend_text{ctr} = ["1/( (s+", num2str(p(i)), ") (s+", num2str(conj(p(i))), ") )"];
         G = G * 1/( (s+p(i)) * (s+conj(p(i))) );
     elseif isreal(p(i)) == true
-        legend_text{ctr} = "1/(s+"+ num2str(p(i))+")" ;
+        legend_text{ctr} = ["1/(s+", num2str(p(i)), ")"];
         G = G * 1/(s+p(i));
     end
     ctr = ctr + 1;
@@ -289,7 +288,7 @@ for i = 1:length(p)
 end
 
 % The gain
-if k ~= 0 && nargin > 2
+if k ~= 0
     for j = 1:length(omega)
         if (k > 0)
             C(j)=0;

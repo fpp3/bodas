@@ -1,5 +1,5 @@
 # bodas
-The asymptotic bode diagram in MATLAB
+The asymptotic bode diagram in OCTAVE
 
 ## Ex.1 with real poles/zeros
 
