@@ -3,9 +3,7 @@
 % Auralius Manurung
 % manurung.auralius@gmail.com
 % 
-% Please, check the PDF file for more detailed examples.
-%
-% sys is the system transfer function in s-domain
+% MODIFICADO para normalizar ceros y polos a 0 dB en baja frecuencia.
 %
 
 function [G, w] = bodas(sys)
@@ -37,6 +35,32 @@ while(~isempty(p))
         break;
     end
 end
+
+% -------------------------------------------------------------------------
+% NUEVO: Calcular la Ganancia Normalizada (K_norm)
+% -------------------------------------------------------------------------
+K_norm = k;
+for j = 1:length(z)
+    if z(j) ~= 0
+        if isreal(z(j))
+            K_norm = K_norm * z(j);
+        else
+            wn = sqrt(z(j)*conj(z(j)));
+            K_norm = K_norm * (wn^2);
+        end
+    end
+end
+for j = 1:length(p)
+    if p(j) ~= 0
+        if isreal(p(j))
+            K_norm = K_norm / p(j);
+        else
+            wn = sqrt(p(j)*conj(p(j)));
+            K_norm = K_norm / (wn^2);
+        end
+    end
+end
+% -------------------------------------------------------------------------
 
 z = sort(z);
 p = sort(p);
@@ -75,7 +99,7 @@ axes(ha(1));
 hold on;
 grid on;
 
-legend_text = cell(length(z) + length(p) + length(k) + 2, 1);
+legend_text = cell(length(z) + length(p) + 2 + 1, 1);
 ctr = 1;
 
 A = zeros(length(z), length(omega));
@@ -86,17 +110,13 @@ G = 1;
 
 for i = 1:length(z)
     if z(i) == 0 % Zero at the origin
-        offset = log10(1/omega(1))*20;
-        for j = 1:length(omega)
-            A(i,j)=20*log10(omega(j)/omega(max(j-1,1)))+ A(i,max(j-1,1));
-        end
-        A(i,:)=A(i,:) - offset;
+        A(i,:) = 20*log10(omega);
     elseif isreal(z(i)) == true
         for j = 1:length(omega)
             if omega(j) >= z(i)
-                A(i,j)=20*log10(omega(j)/omega(max(j-1,1)))+ A(i,max(j-1,1));
+                A(i,j) = 20*log10(omega(j)/z(i));
             else
-                A(i,j)=20*log10(z(i));
+                A(i,j) = 0; % Arranca en 0 dB
             end
         end
     elseif isreal(z(i)) == false
@@ -105,19 +125,18 @@ for i = 1:length(z)
         zeta = (z(i)+conj(z(i)))/2/wn;
         for j = 1:length(omega)
             if omega(j) >= wn
-                A(i,j)=40*log10(omega(j)/omega(max(j-1,1)))+ A(i,max(j-1,1));
+                A(i,j) = 40*log10(omega(j)/wn);
                 if peak == false
                     peak_idx = j;
                     peak = true;
                 end
             else
-                A(i,j)=40*log10(wn);
+                A(i,j) = 0; % Arranca en 0 dB
             end
         end
-        if zeta < 0.5
-            A(i,peak_idx)=A(i,peak_idx)-20*log10(1/(2*zeta));
+        if zeta < 0.5 && peak == true
+            A(i,peak_idx) = A(i,peak_idx) - 20*log10(1/(2*zeta));
         end
-        
     end
     
     plot(omega,A(i,:), 'LineWidth', 2);
@@ -126,11 +145,11 @@ for i = 1:length(z)
         G = G * s;
     else
         if isreal(z(i)) == true
-            legend_text{ctr} = ["s+", num2str(z(i))];
-            G = G * (s+z(i));
+            legend_text{ctr} = ["(1 + s/", num2str(z(i)), ")"];
+            G = G * (1 + s/z(i));
         elseif isreal(z(i)) == false
-            legend_text{ctr} = ["(s+", num2str(z(i)), ") (s+", num2str(conj(z(i))), ")"];
-            G = G * (s+z(i)) * (s+conj(z(i)));
+            legend_text{ctr} = ["(1 + s/", num2str(z(i)), ")(1 + s/", num2str(conj(z(i))), ")"];
+            G = G * (1 + s/z(i)) * (1 + s/conj(z(i)));
         end
     end
     ctr = ctr + 1;
@@ -138,17 +157,13 @@ end
 
 for i = 1:length(p)
     if p(i) == 0  % Pole at the origin
-        offset = log10(1/omega(1))*20;
-        for j = 1:length(omega)
-            B(i,j)=-20*log10(omega(j)/omega(max(j-1,1)))+ B(i,max(j-1,1));
-        end
-        B(i,:)=B(i,:)+offset;
+        B(i,:) = -20*log10(omega);
     elseif isreal(p(i)) == true
         for j = 1:length(omega)
             if omega(j) >= p(i)
-                B(i,j)=-20*log10(omega(j)/omega(max(j-1,1)))+ B(i,max(j-1,1));
+                B(i,j) = -20*log10(omega(j)/p(i));
             else
-                B(i,j)=-20*log10(p(i));
+                B(i,j) = 0; % Arranca en 0 dB
             end
         end
     elseif isreal(p(i)) == false
@@ -157,17 +172,17 @@ for i = 1:length(p)
         zeta = (p(i)+conj(p(i)))/2/wn;
         for j = 1:length(omega)
             if omega(j) >= wn
-                B(i,j)=-40*log10(omega(j)/omega(max(j-1,1)))+ B(i,max(j-1,1));
+                B(i,j) = -40*log10(omega(j)/wn);
                 if peak == false
                     peak_idx = j;
                     peak = true;
                 end
             else
-                B(i,j)=-40*log10(wn);
+                B(i,j) = 0; % Arranca en 0 dB
             end
         end
-        if zeta < 0.5
-            B(i,peak_idx)=B(i,peak_idx)+20*log10(1/(2*zeta));
+        if zeta < 0.5 && peak == true
+            B(i,peak_idx) = B(i,peak_idx) + 20*log10(1/(2*zeta));
         end
     end
     
@@ -177,25 +192,26 @@ for i = 1:length(p)
         legend_text{ctr} = "1/s";
         G = G * 1/s;
     elseif isreal(p(i)) == false
-        legend_text{ctr} = ["1/( (s+", num2str(p(i)), ") (s+", num2str(conj(p(i))), ") )"];
-        G = G * 1/( (s+p(i)) * (s+conj(p(i))) );
+        legend_text{ctr} = ["1/( (1+s/", num2str(p(i)), ")(1+s/", num2str(conj(p(i))), ") )"];
+        G = G * 1/( (1+s/p(i)) * (1+s/conj(p(i))) );
     elseif isreal(p(i)) == true
-        legend_text{ctr} = ["1/(s+", num2str(p(i)), ")"];
-        G = G * 1/(s+p(i));
+        legend_text{ctr} = ["1/(1 + s/", num2str(p(i)), ")"];
+        G = G * 1/(1 + s/p(i));
     end
     ctr = ctr + 1;
 end
 
-% The gain
-if k ~= 0
-    kDb = 20*log10(abs(k));
-    for j = 1:length(omega)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
-        C(j)=kDb;
+% The gain (Modificado para graficar la constante K_norm)
+if K_norm ~= 0
+    kDb = 20*log10(abs(K_norm));
+    for j = 1:length(omega)
+        C(j) = kDb;
     end
     
     plot(omega, C, 'LineWidth', 2);
-    legend_text{ctr} = num2str(k);
-    G = G * k;
+    legend_text{ctr} = ['K = ', num2str(K_norm)];
+    G = G * K_norm;
+    ctr = ctr + 1;
 end
 
 [mag,phase, wout] = bode(G, {10^wmin, 10^wmax});       
@@ -209,7 +225,7 @@ plot(wout, 20*log10(mag), 'LineWidth', 2, 'LineStyle', ':', 'Color', 'k');
 
 legend_text{end-1} = "Asymptotic Bode";
 legend_text{end}= "Exact Bode";
-legend(legend_text, 'Location', 'best');
+legend(legend_text(~cellfun('isempty',legend_text)), 'Location', 'best');
 ylabel('Magnitude (dB)');
 set(gca, 'XScale', 'log');
 
@@ -287,10 +303,10 @@ for i = 1:length(p)
     plot(omega,B(i,:), 'LineWidth', 2);
 end
 
-% The gain
-if k ~= 0
+% The gain phase (Modificado para detectar el signo de K_norm)
+if K_norm ~= 0
     for j = 1:length(omega)
-        if (k > 0)
+        if (K_norm > 0)
             C(j)=0;
         else
             C(j)=-180;
