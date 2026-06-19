@@ -6,7 +6,17 @@
 % MODIFICADO para normalizar ceros y polos a 0 dB en baja frecuencia.
 %
 
-function [G, w] = bodas(sys)
+function [G, w] = bodas(sys, f_range, mag_range, phase_range)
+if nargin < 2
+    f_range = [];
+end
+if nargin < 3
+    mag_range = [];
+end
+if nargin < 4
+    phase_range = [];
+end
+
 [z, p, k] = zpkdata(sys);
 z = z{1};
 p = p{1};
@@ -80,9 +90,34 @@ if isempty(W)
     W = 1;
 end
 
-% Rango fijo de frecuencia solicitado: de 1 Hz a 10 MHz
-fmin_hz = 1;
-fmax_hz = 10^5;
+% Determine frequency range automatically or use user-specified range
+if isempty(f_range)
+    % Automatic range calculation
+    % Corner frequencies of poles and zeros in Hz
+    W = unique(nonzeros([z; p]));
+    for j  = 1 : length(W)
+        if isreal(W(j)) == false
+            wn = sqrt(W(j) * conj(W(j)));
+            W(j) = log10(wn / (2 * pi));
+        else
+            W(j) = log10(W(j) / (2 * pi));
+        end
+    end
+    W = sort(W);
+    if isempty(W)
+        wmin_hz = 0; % 1 Hz
+        wmax_hz = 5; % 100 kHz
+    else
+        wmin_hz = floor(W(1)) - 2;
+        wmax_hz = ceil(W(end)) + 2;
+    end
+    fmin_hz = 10^wmin_hz;
+    fmax_hz = 10^wmax_hz;
+else
+    fmin_hz = f_range(1);
+    fmax_hz = f_range(2);
+end
+
 wmin = log10(2 * pi * fmin_hz);
 wmax = log10(2 * pi * fmax_hz);
 omega = logspace(wmin, wmax, 5000);
@@ -134,7 +169,7 @@ for i = 1:length(z)
             A_gain(i,peak_idx) = A_gain(i,peak_idx) - 20*log10(1/(2*zeta));
         end
         legend_text_gain{end+1} = ["(1 + s/", num2str(z(i)), ")(1 + s/", num2str(conj(z(i))), ")"];
-        G = G * (1 + s/z(i)) * (1 + s/conj(z(i)));
+        G = G * (1 + 2*zeta/wn * s + 1/wn^2 * s^2);
     end
 end
 
@@ -172,7 +207,7 @@ for i = 1:length(p)
             B_gain(i,peak_idx) = B_gain(i,peak_idx) + 20*log10(1/(2*zeta));
         end
         legend_text_gain{end+1} = ["1/( (1+s/", num2str(p(i)), ")(1+s/", num2str(conj(p(i))), ") )"];
-        G = G * 1/( (1+s/p(i)) * (1+s/conj(p(i))) );
+        G = G * 1 / (1 + 2*zeta/wn * s + 1/wn^2 * s^2);
     end
 end
 
@@ -183,9 +218,12 @@ if K_norm ~= 0
     G = G * K_norm;
 end
 
-[mag, phase, wout] = bode(G, {10^wmin, 10^wmax});
+[mag, phase, wout] = bode(G, omega);
 phase = squeeze(phase);
+phase = phase(:).';
 mag = squeeze(mag);
+mag = mag(:).';
+wout = wout(:).';
 M = sum([sum(A_gain,1); sum(B_gain,1); C_gain], 1);
 
 % Phase data
@@ -278,7 +316,7 @@ omega_hz = omega / (2 * pi);
 wout_hz = wout / (2 * pi);
 
 % Figure 1: Gain with parts
-figure('Name', 'Magnitude: Asymptotic with Parts', 'NumberTitle', 'off');
+figure(1, 'Name', 'Magnitude: Asymptotic with Parts', 'NumberTitle', 'off');
 set(gcf,'units','normalized','outerposition',[0 0.5 0.5 0.5])
 hold on; grid on;
 for i = 1:size(A_gain, 1), plot(omega_hz, A_gain(i,:), 'LineWidth', 1.5); end
@@ -289,9 +327,12 @@ plot(wout_hz, 20*log10(mag), 'LineWidth', 2, 'LineStyle', ':', 'Color', 'k');
 legend([legend_text_gain, "Asymptotic Sum", "Exact Bode"], 'Location', 'best');
 ylabel('Magnitude (dB)'); xlabel('Frequency (Hz)'); set(gca, 'XScale', 'log');
 xlim([fmin_hz, fmax_hz]);
+if ~isempty(mag_range)
+    ylim(mag_range);
+end
 
 % Figure 2: Gain only
-figure('Name', 'Magnitude: Asymptotic only', 'NumberTitle', 'off');
+figure(2, 'Name', 'Magnitude: Asymptotic only', 'NumberTitle', 'off');
 set(gcf,'units','normalized','outerposition',[0.5 0.5 0.5 0.5])
 hold on; grid on;
 plot(omega_hz, M, 'LineWidth', 3, 'Color', [.7, .7, .7]);
@@ -299,9 +340,12 @@ plot(wout_hz, 20*log10(mag), 'LineWidth', 2, 'LineStyle', ':', 'Color', 'k');
 legend({"Asymptotic Sum", "Exact Bode"}, 'Location', 'best');
 ylabel('Magnitude (dB)'); xlabel('Frequency (Hz)'); set(gca, 'XScale', 'log');
 xlim([fmin_hz, fmax_hz]);
+if ~isempty(mag_range)
+    ylim(mag_range);
+end
 
 % Figure 3: Phase with parts
-figure('Name', 'Phase: Asymptotic with Parts', 'NumberTitle', 'off');
+figure(3, 'Name', 'Phase: Asymptotic with Parts', 'NumberTitle', 'off');
 set(gcf,'units','normalized','outerposition',[0 0 0.5 0.5])
 hold on; grid on;
 for i = 1:size(A_phase, 1), plot(omega_hz, A_phase(i,:), 'LineWidth', 1.5); end
@@ -312,9 +356,12 @@ plot(wout_hz, phase + dphase, 'LineWidth', 2, 'LineStyle', ':', 'Color', 'k');
 legend([legend_text_phase, "Asymptotic Sum", "Exact Bode"], 'Location', 'best');
 ylabel('Phase (degrees)'); xlabel('Frequency (Hz)'); set(gca, 'XScale', 'log');
 xlim([fmin_hz, fmax_hz]);
+if ~isempty(phase_range)
+    ylim(phase_range);
+end
 
 % Figure 4: Phase only
-figure('Name', 'Phase: Asymptotic only', 'NumberTitle', 'off');
+figure(4, 'Name', 'Phase: Asymptotic only', 'NumberTitle', 'off');
 set(gcf,'units','normalized','outerposition',[0.5 0 0.5 0.5])
 hold on; grid on;
 plot(omega_hz, S, 'LineWidth', 3, 'Color', [.7, .7, .7]);
@@ -322,6 +369,9 @@ plot(wout_hz, phase + dphase, 'LineWidth', 2, 'LineStyle', ':', 'Color', 'k');
 legend({"Asymptotic Sum", "Exact Bode"}, 'Location', 'best');
 ylabel('Phase (degrees)'); xlabel('Frequency (Hz)'); set(gca, 'XScale', 'log');
 xlim([fmin_hz, fmax_hz]);
+if ~isempty(phase_range)
+    ylim(phase_range);
+end
 
 w = {10^wmin 10^wmax};
 end
